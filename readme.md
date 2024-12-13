@@ -1,10 +1,9 @@
 # Mnemos
 
-Mnemos is a simplest version control system designed for developers who value sanity over ceremony. Track changes, commit versions, revert to previous states, and send changes to remotes.
+Mnemos is simplest version control system (yes, really - the question is, why hasn’t this existed already) - designed for developers who value sanity over ceremony. Track changes, commit versions, revert to previous states, and send changes to remotes.
 
 ## Why Mnemos?
 
-- Mnemos follows the UNIX philosophy—do one thing and do it well. No detached heads, no cryptic fast-forward errors, no rebase drama.
 - Track files, commit changes, and restore versions without sacrificing goats under a dark blood moon.
 - Send changes to remotes and fetch them back without labyrinthine workflows.
 
