@@ -11,9 +11,9 @@ We're writing code or poetry here, then tracking, not launching a spaceship — 
 
 ## Features
 
-- Local Version Control: Track files, commit changes, and revert effortlessly.
-- Remote Support: Add a remote, send commits, fetch changes, or even create a remote repository.
-- Human-Friendly: Simple commands, meaningful messages, no detached HEAD states.
+- Local version vontrol: track files, commit changes, and revert. Done.
+- Remote support: add remotes, send commits, fetch changes, or even create a remote repository.
+- Human-friendly: simple commands, meaningful messages, no detached HEAD states.
 
 ## Compile and Install
 
