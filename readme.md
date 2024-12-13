@@ -73,9 +73,9 @@ To find available commit hashes, simply list them with:
 
 	    ls .mnemos/commits
 
-**Why this approach? Because we want to treat everything like a file, when UNIX allows. Your commits are not buried in some opaque database, they're real directories stored in .mnemos/commits, directly accessible with standard tools like ls.**
+**Why this approach? Because we want to treat everything like a file, when UNIX allows. Your commits are not buried in some crappy database, they are real directories stored in .mnemos/commits, directly accessible with standard tools like ls.**
 
-**This means you don't need special commands or bloated abstractions just to see what's been saved. *ls* gives you all the context you need. Each commit hash is its own entity, ready to revert, inspect, or send to a remote without blood moon ceremonies.**
+**This means you don't need special commands or bloat just to see what's saved. *ls* gives you all the context you need. Each commit hash is its own entity, to revert, inspect, or send to remotes without blood moon ceremonies.**
 
 Revert the repository to a specific commit using its hash:
 
@@ -103,4 +103,4 @@ Create remote repository from your local Mnemos repository:
 
 ## License
 
-This project is open source. Use it, modify it, share it - just don't let it become bloated.
+This project is open source. Use it, modify it, share it - just don't sacrifice goats under a blood-red moon.
