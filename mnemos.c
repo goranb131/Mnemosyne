@@ -64,7 +64,7 @@ void track(const char *filename) {
 
     char line[256];
     while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0; // Strip newline
+        line[strcspn(line, "\n")] = 0; // strip newline
         if (strcmp(line, filename) == 0) {
             fclose(index);
             printf("File '%s' is already tracked. Skipping.\n", filename);
@@ -114,16 +114,16 @@ void commit(const char *message) {
     char line[256];
     char hash[HASH_SIZE];
 
-    // Generate commit hash
+    // generate commit hash
     time_t now = time(NULL);
     snprintf(hash, sizeof(hash), "%lx", now); // Timestamp-based hash
 
-    // Create commit directory
+    // create commit directory
     char commit_dir[256];
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, hash);
     mkdir(commit_dir, 0755);
 
-    // Save metadata (commit message)
+    // save metadata (commit message)
     char metadata_path[256];
     snprintf(metadata_path, sizeof(metadata_path), "%s/message", commit_dir);
     FILE *metadata = fopen(metadata_path, "w");
@@ -134,7 +134,7 @@ void commit(const char *message) {
     fprintf(metadata, "message: %s\n", message);
     fclose(metadata);
 
-    // Save timestamp
+    // save timestamp, history matters
     char timestamp_path[256];
     snprintf(timestamp_path, sizeof(timestamp_path), "%s/timestamp", commit_dir);
     FILE *timestamp = fopen(timestamp_path, "w");
@@ -142,10 +142,10 @@ void commit(const char *message) {
         perror("Failed to create timestamp file");
         exit(1);
     }
-    fprintf(timestamp, "%ld\n", now); // Store the epoch time
+    fprintf(timestamp, "%ld\n", now); // store the epoch time
     fclose(timestamp);
 
-    // Save tracked files
+    // save tracked files
     FILE *index = fopen(INDEX_FILE, "r");
     if (!index) {
         perror("Failed to read index");
@@ -153,7 +153,7 @@ void commit(const char *message) {
     }
 
     while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0; // Strip newline
+        line[strcspn(line, "\n")] = 0; // strip newline
 
         struct stat st;
         if (stat(line, &st) != 0) {
@@ -167,7 +167,7 @@ void commit(const char *message) {
     }
     fclose(index);
 
-    // Update HEAD
+    // update HEAD because this is now the latest and greatest commit
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -186,7 +186,7 @@ void revert(const char *commit_hash) {
     char tracked_files[1024][256];
     int tracked_count = 0;
 
-    // Check if commit directory exists
+    // check if commit directory exists
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
     struct stat st;
     if (stat(commit_dir, &st) != 0) {
@@ -196,7 +196,7 @@ void revert(const char *commit_hash) {
 
     printf("Reverting to commit: %s\n", commit_hash);
 
-    // Read the index to get the list of tracked files
+    // read index to get the list of tracked files
     FILE *index = fopen(INDEX_FILE, "r");
     if (!index) {
         perror("Failed to read index");
@@ -208,7 +208,7 @@ void revert(const char *commit_hash) {
     }
     fclose(index);
 
-    // Read files in the commit directory
+    // read files in commit directory
     DIR *dir = opendir(commit_dir);
     if (!dir) {
         perror("Failed to open commit directory");
@@ -217,32 +217,32 @@ void revert(const char *commit_hash) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip special files and metadata files
+        // skip special files and metadata files
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, "timestamp") == 0 || strcmp(entry->d_name, "message") == 0) {
             continue;
         }
 
-        // Construct paths for source (commit directory) and destination (working directory)
+        // make a way for source (commit directory) and destination (working directory)
         char src_path[256], dest_path[256];
         snprintf(src_path, sizeof(src_path), "%s/%s", commit_dir, entry->d_name);
         snprintf(dest_path, sizeof(dest_path), "%s", entry->d_name);
 
-        // Restore the file
+        // restore file
         copy_file(src_path, dest_path);
         printf("Restored: %s\n", entry->d_name);
 
-        // Mark the file as restored (remove from tracked list)
+        // mark the file as restored (remove from tracked list)
         for (int i = 0; i < tracked_count; ++i) {
             if (strcmp(tracked_files[i], entry->d_name) == 0) {
-                tracked_files[i][0] = '\0'; // Mark as restored
+                tracked_files[i][0] = '\0'; // mark as restored
             }
         }
     }
     closedir(dir);
 
-    // Remove files that are tracked but not in the commit
+    // remove files that are tracked but not in commit
     for (int i = 0; i < tracked_count; ++i) {
-        if (tracked_files[i][0] != '\0') { // File not restored
+        if (tracked_files[i][0] != '\0') { // not restored
             if (remove(tracked_files[i]) == 0) {
                 printf("Removed: %s\n", tracked_files[i]);
             } else {
@@ -251,7 +251,7 @@ void revert(const char *commit_hash) {
         }
     }
 
-    // Update HEAD
+    // ppdate HEAD
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -318,10 +318,10 @@ void send() {
     fgets(remote_path, sizeof(remote_path), remote);
     fclose(remote);
 
-    // Trim newline
+    // trim newline
     remote_path[strcspn(remote_path, "\n")] = 0;
 
-    // Rsync commits into the remote's 'commits' directory
+    // rsync commits into remote commits dir
     char command[512];
     snprintf(command, sizeof(command), "rsync -av %s/ %s/commits/", COMMITS_DIR, remote_path);
     int result = system(command);
@@ -345,17 +345,17 @@ void fetch() {
     fgets(remote_path, sizeof(remote_path), remote);
     fclose(remote);
 
-    // Trim newline
+    // trim newline
     remote_path[strcspn(remote_path, "\n")] = 0;
 
-    // Check if .mnemos exists
+    // make sure .mnemos exists
     struct stat st;
     if (stat(MNEMOS_DIR, &st) != 0) {
         printf("Error: This is not a Mnemos repository. Initialize it first with 'mnemos init'.\n");
         exit(1);
     }
 
-    // Rsync contents of remote commits directory directly into local .mnemos/commits
+    // rsync contents of remote commits directory directly into local .mnemos/commits
     char command[512];
     snprintf(command, sizeof(command), "rsync -av %s/commits/ %s/", remote_path, COMMITS_DIR);
     int result = system(command);
@@ -371,7 +371,7 @@ void fetch() {
 void create_remote(const char *remote_path) {
     char command[512];
 
-    // Use single quotes around the mkdir command to ensure remote shell interprets ~ correctly
+    // single quotes around the mkdir command to so shell interprets ~ correctly
     snprintf(command, sizeof(command),
              "ssh %s 'mkdir -p \"%s/commits\" && mkdir -p \"%s/objects\" && touch \"%s/HEAD\"'",
              remote_path, remote_path, remote_path, remote_path);
@@ -379,12 +379,13 @@ void create_remote(const char *remote_path) {
 
     if (result == 0) {
         printf("Created remote repository at: %s\n", remote_path);
-        set_remote(remote_path); // Automatically set the new remote
+        set_remote(remote_path); // automatically set new remote
     } else {
         printf("Failed to create remote repository.\n");
     }
 }
 
+// just init repo on remote from local
 void remote_init() {
     FILE *remote = fopen(REMOTE_FILE, "r");
     if (!remote) {
@@ -400,16 +401,16 @@ void remote_init() {
     }
     fclose(remote);
 
-    // Trim newline
+    // trim newline
     remote_path[strcspn(remote_path, "\n")] = 0;
 
-    // Ensure remote_path is not empty
+    // make sure remote_path is not empty
     if (strlen(remote_path) == 0) {
         printf("Remote path is empty. Please set a valid remote path.\n");
         return;
     }
 
-    // Extract user@host and remote directory
+    // extract user@host and remote directory
     char user_host[128] = {0};
     char remote_dir[128] = {0};
     char *colon = strchr(remote_path, ':');
@@ -423,16 +424,16 @@ void remote_init() {
         return;
     }
 
-    // Prepare the SSH command
+    // for SSH command
     char command[512];
     snprintf(command, sizeof(command),
              "ssh %s 'mkdir -p \"%s/commits\" && mkdir -p \"%s/objects\" && touch \"%s/HEAD\" && touch \"%s/index\"'",
              user_host, remote_dir, remote_dir, remote_dir, remote_dir);
 
-    // Debug command output
-    printf("Executing command: %s\n", command);
+    // debug
+    // printf("Executing command: %s\n", command);
 
-    // Execute the command
+    // execute 
     int result = system(command);
 
     if (result == 0) {
@@ -461,7 +462,7 @@ void list_commits() {
             continue;
         }
 
-        // Get timestamp for each commit
+        // stamp of Time for each commit, so we can see how old we get
         char timestamp_path[256];
         snprintf(timestamp_path, sizeof(timestamp_path), "%s/%s/timestamp", COMMITS_DIR, entry->d_name);
 
@@ -471,7 +472,7 @@ void list_commits() {
             fscanf(timestamp_file, "%ld", &commits[count].timestamp);
             fclose(timestamp_file);
         } else {
-            commits[count].timestamp = 0; // Missing timestamp
+            commits[count].timestamp = 0; // missing timestamp
         }
 
         strcpy(commits[count].hash, entry->d_name);
@@ -479,11 +480,11 @@ void list_commits() {
     }
     closedir(dir);
 
-    // Sort commits by timestamp
+    // sort commits by timestamp
     for (int i = 0; i < count - 1; ++i) {
         for (int j = i + 1; j < count; ++j) {
             if (commits[i].timestamp > commits[j].timestamp) {
-                // Swap
+                // swap
                 time_t temp_time = commits[i].timestamp;
                 commits[i].timestamp = commits[j].timestamp;
                 commits[j].timestamp = temp_time;
@@ -496,7 +497,7 @@ void list_commits() {
         }
     }
 
-    // Print commits
+    // print commits
     printf("Commits (newest to oldest):\n");
     for (int i = count - 1; i >= 0; --i) {
         printf("Commit: %s, Timestamp: %ld\n", commits[i].hash, commits[i].timestamp);
