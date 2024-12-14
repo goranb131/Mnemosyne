@@ -116,7 +116,7 @@ void commit(const char *message) {
 
     // generate commit hash
     time_t now = time(NULL);
-    snprintf(hash, sizeof(hash), "%lx", now); // Timestamp-based hash
+    snprintf(hash, sizeof(hash), "%lx", now); 
 
     // create commit directory
     char commit_dir[256];
