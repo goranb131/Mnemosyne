@@ -1,8 +1,8 @@
-# Mnemos
+# Mnemosyne
 
-Mnemos is simplest version control system (yes, really - the question is, why hasn’t this existed already) - designed for developers who value sanity over ceremony. Track changes, commit versions, revert to previous states, and send changes to remotes.
+Mnemosyne is simplest version control system (yes, really - the question is, why hasn’t this existed already) - designed for developers who value sanity over ceremony. Track changes, commit versions, revert to previous states, and send changes to remotes.
 
-## Why Mnemos?
+## Why Mnemosyne?
 
 - Track files, commit changes, and restore versions without sacrificing goats under a dark blood moon.
 - Send changes to remotes and fetch them back without labyrinthine workflows.
@@ -19,7 +19,7 @@ We're writing code or poetry here, then tracking, not launching a spaceship — 
 
 ### Compile Directly
 
-To compile Mnemos manually, use:
+To compile Mnemosyne manually, use:
 
 		cc mnemos.c -o mnemos
 
@@ -41,11 +41,13 @@ If you want to uninstall:
 
 ## Usage
 
+Mnemosyne core uses shorthand mnemos commands.
+
 ### Commands
 
 #### Initialization
 
-Initialize a new Mnemos repository in the current directory:
+Initialize a new Mnemosyne repository in the current directory:
 
 	    mnemos init
 
@@ -87,7 +89,7 @@ Set a remote repository path:
 
 		mnemos remote <path>
 
-Mnemos remotes work with rsync over ssh. No HTTP, we're not building a web service. When improved it will use 9P(as the gods intended), but for now, rsync over ssh gets the job done.
+Mnemosyne remotes work with rsync over ssh. No HTTP, we're not building a web service. When improved it will use 9P(as the gods intended), but for now, rsync over ssh gets the job done.
 
 Send commits to configured remote:
 
@@ -97,7 +99,7 @@ Fetch commits from configured remote:
 
 		mnemos fetch
 
-Create remote repository from your local Mnemos repository:
+Create remote repository from your local Mnemosyne repository:
 
 		mnemos create-remote <remote_path>
 
