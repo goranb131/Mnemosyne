@@ -1,6 +1,6 @@
 # Variables
 CC = cc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -O2 -std=c99
 TARGET = mnemos
 PREFIX = /usr/local
 
