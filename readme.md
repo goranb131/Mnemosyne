@@ -103,6 +103,79 @@ Create remote repository from your local Mnemosyne repository:
 
 		mnemos create-remote <remote_path>
 
+## Deployment
+
+To automatically trigger a deploy script on your server when you *mnemos send*, you can utilize SSH and a simple server-side hook mechanism, much like Git's post-receive hooks but fully customizable with UNIX tools.
+
+### Add a deploy hook on the server
+
+On your (assuming UNIX or UNIX-like) server, create a script that will handle deployment whenever Mnemosyne sends changes:
+
+		sudo vi /usr/local/bin/mnemos-deploy.sh
+
+*mnemos-deploy.sh*
+
+		#!/bin/sh
+		# Mnemos deploy script for Svelte TS project
+
+		REPO_DIR="/path/to/mnemos-repo"
+		DEPLOY_DIR="/var/www/project"
+		BUILD_CMD="vite build"
+
+		echo "==== Mnemos Deploy Script ===="
+
+		# Ensure we're in the repository directory
+		cd "$REPO_DIR" || exit 1
+
+		# Sync files from repo to deploy directory
+		rsync -av --exclude=".mnemos" "$REPO_DIR/" "$DEPLOY_DIR/"
+
+		# Build the project (if needed)
+		echo "Building project..."
+		cd "$DEPLOY_DIR" || exit 1
+		$BUILD_CMD
+
+		# Print success message
+		echo "Deployment completed successfully!"
+
+Make it executable: 
+
+		chmod +x /usr/local/bin/mnemos-deploy.sh
+
+### Trigger deploy script dfter mnemos send
+
+Since Mnemosyne uses rsync to send commits, you can detect new changes on the server using a file-based trigger.
+
+Set up post-receive trigger - create a file in your repository to act as trigger for the deploy script:
+
+		vi /path/to/mnemos-repo/.mnemos/post-receive
+
+*.mnemos/post-receive*
+
+		#!/bin/sh
+		# Trigger deploy script after mnemos sync
+		/usr/local/bin/mnemos-deploy.sh
+
+Make it executable:
+
+		chmod +x /path/to/mnemos-repo/.mnemos/post-receive
+
+Now, configure your server to run the trigger script after any rsync-based mnemos send.
+
+FreeBSD uses kqueue (ie. sysutils/watchexec), Linux uses inotify. FreeBSD example:
+
+		pkg install watchexec
+
+		watchexec --restart -- /path/to/mnemos-repo/.mnemos/post-receive
+
+Whenever a change occurs (after mnemos send), this will trigger the deploy script.
+
+Option 2: Use SSH Command Chaining
+
+Another approach is to directly run the deploy script after mnemos send.
+
+		mnemos send && ssh user@server "/usr/local/bin/mnemos-deploy.sh"
+
 ## License
 
 This project is open source. Use it, modify it, share it - just don't sacrifice goats under a blood-red moon.
