@@ -238,8 +238,9 @@ void restore_recursive(const char *src_base, const char *dest_base) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip special files
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+        // Skip special files and metadata files
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
+            strcmp(entry->d_name, "timestamp") == 0 || strcmp(entry->d_name, "message") == 0) {
             continue;
         }
 
