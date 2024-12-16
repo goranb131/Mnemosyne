@@ -1,3 +1,11 @@
+/*
+ * Mnemonyse: The Simplest Version Control
+ * -------------------------------------------
+ * Designed for humans who just want their files tracked and backed up.
+ * Can be explained to your cat in one sitting.
+ *
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +28,7 @@ void track(const char *filename);
 void track_all();
 void commit(const char *message);
 void revert(const char *commit_hash);
+void diff_file(const char *filename, const char *commit1, const char *commit2, int latest_flag);
 void copy_file(const char *src, const char *dest);
 void set_remote(const char *remote_path);
 void send();
@@ -95,7 +104,7 @@ void track_all_recursive(const char *dir_path) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip special files
+        // skip special files
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
@@ -106,10 +115,10 @@ void track_all_recursive(const char *dir_path) {
         struct stat st;
         if (stat(full_path, &st) == 0) {
             if (S_ISDIR(st.st_mode)) {
-                // If entry is a directory, recursively track its contents
+                // if directory, track it recursive
                 track_all_recursive(full_path);
             } else if (S_ISREG(st.st_mode)) {
-                // If entry is a regular file, track it
+                // if regular file then track it
                 track(full_path);
             }
         } else {
@@ -120,7 +129,7 @@ void track_all_recursive(const char *dir_path) {
 }
 
 void track_all() {
-    // Start tracking recursively from the current directory
+    // recursive tracking from current dir
     track_all_recursive(".");
 }
 void create_directories(const char *path) {
@@ -131,28 +140,29 @@ void create_directories(const char *path) {
     for (char *p = temp + 1; *p; p++) {
         if (*p == '/') {
             *p = '\0';
-            mkdir(temp, 0755); // Create intermediate directory
+            // make way for intermediate directory
+            mkdir(temp, 0755); 
             *p = '/';
         }
     }
 }
 
-// commit changes
+// just commit, you have better things to do than read 47 pages of documentation.
 void commit(const char *message) {
     char line[256];
     char hash[HASH_SIZE];
     FILE *temp_index;
 
-    // Generate commit hash
+    // generate commit hash
     time_t now = time(NULL);
     snprintf(hash, sizeof(hash), "%lx", now);
 
-    // Create commit directory
+    // make way for commit directory
     char commit_dir[256];
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, hash);
     mkdir(commit_dir, 0755);
 
-    // Save metadata (commit message)
+    // save metadata commit message
     char metadata_path[256];
     snprintf(metadata_path, sizeof(metadata_path), "%s/message", commit_dir);
     FILE *metadata = fopen(metadata_path, "w");
@@ -163,7 +173,7 @@ void commit(const char *message) {
     fprintf(metadata, "message: %s\n", message);
     fclose(metadata);
 
-    // Save timestamp
+    // save timestamp
     char timestamp_path[256];
     snprintf(timestamp_path, sizeof(timestamp_path), "%s/timestamp", commit_dir);
     FILE *timestamp = fopen(timestamp_path, "w");
@@ -174,14 +184,13 @@ void commit(const char *message) {
     fprintf(timestamp, "%ld\n", now);
     fclose(timestamp);
 
-    // Process the index file
     FILE *index = fopen(INDEX_FILE, "r");
     if (!index) {
         perror("Failed to read index");
         exit(1);
     }
 
-    // Temporary index to hold valid entries
+    // temp index holding valid entries
     temp_index = fopen(".mnemos/index.temp", "w");
     if (!temp_index) {
         perror("Failed to create temporary index");
@@ -190,29 +199,30 @@ void commit(const char *message) {
     }
 
     while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0; // Strip newline
+        line[strcspn(line, "\n")] = 0; // strip newline
 
         struct stat st;
         if (stat(line, &st) == 0) {
-            // File exists, commit it
+            // file exists, commit it
             char object_path[256];
             snprintf(object_path, sizeof(object_path), "%s/%s", commit_dir, line);
 
-            // Ensure directory structure exists
+            // dir structure must exist
             create_directories(object_path);
 
-            // Copy file to commit
+            // copy file to commit
             copy_file(line, object_path);
-            fprintf(temp_index, "%s\n", line); // Keep in new index
+            // keep in new index
+            fprintf(temp_index, "%s\n", line); 
         } else {
-            // File is missing, warn and skip
+            // file is missing, warn and skip
             printf("Warning: File '%s' is missing. Skipping.\n", line);
         }
     }
     fclose(index);
     fclose(temp_index);
 
-    // Replace old index with new valid index
+    // old index replaced with new valid index
     rename(".mnemos/index.temp", INDEX_FILE);
 
     // Update HEAD to latest commit
@@ -226,7 +236,8 @@ void commit(const char *message) {
 
     printf("Committed changes: %s\n", message);
 }
-// Mnemos remembers. revert to another time, a simpler time
+
+// Mnemonyse remembers. 
 // Recursive function to traverse and restore directories and files
 void restore_recursive(const char *src_base, const char *dest_base) {
     struct stat st;
@@ -238,30 +249,30 @@ void restore_recursive(const char *src_base, const char *dest_base) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip special files and metadata files
+        // skip special files and metadata 
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
             strcmp(entry->d_name, "timestamp") == 0 || strcmp(entry->d_name, "message") == 0) {
             continue;
         }
 
-        // Construct full paths for source and destination
+        // make way for source and destination
         char src_entry[512], dest_entry[512];
         snprintf(src_entry, sizeof(src_entry), "%s/%s", src_base, entry->d_name);
         snprintf(dest_entry, sizeof(dest_entry), "%s/%s", dest_base, entry->d_name);
 
         if (stat(src_entry, &st) == 0) {
             if (S_ISDIR(st.st_mode)) {
-                // Create destination directory
+                // make way for destination dir
                 create_directories(dest_entry);
                 printf("Restored directory: %s\n", dest_entry);
 
-                // Recursively restore contents of the directory
+                // recursive restoration of dir contents
                 restore_recursive(src_entry, dest_entry);
             } else if (S_ISREG(st.st_mode)) {
-                // Ensure parent directories exist
+                // parent directories must exist
                 create_directories(dest_entry);
 
-                // Restore file
+                // restore file
                 copy_file(src_entry, dest_entry);
                 printf("Restored file: %s\n", dest_entry);
             }
@@ -272,11 +283,19 @@ void restore_recursive(const char *src_base, const char *dest_base) {
     closedir(dir);
 }
 
-// Mnemos remembers. Revert to another time, a simpler time
+
+/* 
+ * Mnemonyse remembers. Revert to another time, a simpler time.
+ *
+ * If I want to revert, let me revert! Don't nanny me about unstaged or untracked files.
+ * Either:
+ *   1. Handhold the "stupid masses" through every commit, rebase, and revert; OR
+ *   2. Be a pure, no-frills, Unix-style tool that assumes the user knows what they're doing.
+ */
 void revert(const char *commit_hash) {
     char commit_dir[256];
 
-    // Check if the commit directory exists
+    // does commit dir exist
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
     struct stat st;
     if (stat(commit_dir, &st) != 0) {
@@ -286,10 +305,10 @@ void revert(const char *commit_hash) {
 
     printf("Reverting to commit: %s\n", commit_hash);
 
-    // Start restoring from the root of the commit directory
+    // start restoring from root of commit directory
     restore_recursive(commit_dir, ".");
 
-    // Update HEAD to the reverted commit
+    // update HEAD to reverted commit
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -299,6 +318,174 @@ void revert(const char *commit_hash) {
     fclose(head);
 
     printf("Revert complete.\n");
+}
+
+
+/*
+ * moments: A simple stroll through project history.
+ * 
+ *   - Pretty log? Add --pretty=oneline or --graph or --decorate=auto.
+ *   - Reverse order? Combine flags until you break something.
+ * 
+ * Mnemonyse gives you moments. Oldest? Newest? Just ask.
+ * Not feeling like you are hacking Pentagon to see what you worked on last week.
+ */
+void moments(const char *order_flag) {
+    DIR *dir = opendir(COMMITS_DIR);
+    if (!dir) {
+        perror("Failed to open commits directory");
+        exit(1);
+    }
+
+    struct dirent *entry;
+    struct {
+        char hash[HASH_SIZE];
+        time_t timestamp;
+        char message[256];
+    } commits[1024]; // make this adjustable?
+    int count = 0;
+
+    // collect commit data
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char commit_dir[256], timestamp_path[256], message_path[256];
+        snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, entry->d_name);
+
+        snprintf(timestamp_path, sizeof(timestamp_path), "%s/timestamp", commit_dir);
+        snprintf(message_path, sizeof(message_path), "%s/message", commit_dir);
+
+        FILE *timestamp_file = fopen(timestamp_path, "r");
+        FILE *message_file = fopen(message_path, "r");
+
+        if (timestamp_file) {
+            fscanf(timestamp_file, "%ld", &commits[count].timestamp);
+            fclose(timestamp_file);
+        } else {
+            commits[count].timestamp = 0;
+        }
+
+        if (message_file) {
+            fgets(commits[count].message, sizeof(commits[count].message), message_file);
+            commits[count].message[strcspn(commits[count].message, "\n")] = 0; // remove newline
+            fclose(message_file);
+        } else {
+            strcpy(commits[count].message, "No message");
+        }
+
+        strcpy(commits[count].hash, entry->d_name);
+        count++;
+    }
+    closedir(dir);
+
+    // sort commits by timestamp
+    for (int i = 0; i < count - 1; ++i) {
+        for (int j = i + 1; j < count; ++j) {
+            if (commits[i].timestamp > commits[j].timestamp) {
+                // Swap
+                time_t temp_time = commits[i].timestamp;
+                commits[i].timestamp = commits[j].timestamp;
+                commits[j].timestamp = temp_time;
+
+                char temp_hash[HASH_SIZE], temp_message[256];
+                strcpy(temp_hash, commits[i].hash);
+                strcpy(temp_message, commits[i].message);
+
+                strcpy(commits[i].hash, commits[j].hash);
+                strcpy(commits[i].message, commits[j].message);
+
+                strcpy(commits[j].hash, temp_hash);
+                strcpy(commits[j].message, temp_message);
+            }
+        }
+    }
+
+    printf("Commit Moments:\n");
+    if (strcmp(order_flag, "-n") == 0) {
+        for (int i = count - 1; i >= 0; --i) {
+            printf("Commit: %s | Time: %s | Message: %s\n",
+                   commits[i].hash,
+                   // human-readable time
+                   ctime(&commits[i].timestamp), 
+                   commits[i].message);
+        }
+    } else if (strcmp(order_flag, "-o") == 0) {
+        for (int i = 0; i < count; ++i) {
+            printf("Commit: %s | Time: %s | Message: %s\n",
+                   commits[i].hash,
+                   ctime(&commits[i].timestamp),
+                   commits[i].message);
+        }
+    } else {
+        printf("Invalid flag for moments. Use -n (newest) or -o (oldest).\n");
+    }
+}
+
+/* 
+ * Let's talk about diff.
+ * 
+ * Compare the index? The staging area? 
+ * Your last mistake? Your future regret? Who knows.
+ *   - Want to compare two commits? Provide filenames and commit hashes.
+ *   - Want to compare a file to the latest commit? Use -n.
+ */
+void diff_file(const char *filename, const char *commit1, const char *commit2, int latest_flag) {
+    char path1[512], path2[512];
+    struct stat st1, st2;
+    int result;
+
+    if (latest_flag) {
+        // get latest commit hash
+        FILE *head_file = fopen(HEAD_FILE, "r");
+        if (!head_file) {
+            printf("Error: Could not open HEAD file to get the latest commit.\n");
+            return;
+        }
+
+        char latest_commit[HASH_SIZE];
+        if (!fgets(latest_commit, sizeof(latest_commit), head_file)) {
+            printf("Error: Could not read the latest commit hash from HEAD file.\n");
+            fclose(head_file);
+            return;
+        }
+        fclose(head_file);
+
+        // trim newline if exists
+        latest_commit[strcspn(latest_commit, "\n")] = 0;
+
+        // path to file in the latest commit
+        snprintf(path1, sizeof(path1), "%s/%s/%s", COMMITS_DIR, latest_commit, filename);
+        snprintf(path2, sizeof(path2), "%s", filename); // Working directory file
+    } else {
+        // paths to files in specified commits
+        snprintf(path1, sizeof(path1), "%s/%s/%s", COMMITS_DIR, commit1, filename);
+        snprintf(path2, sizeof(path2), "%s/%s/%s", COMMITS_DIR, commit2, filename);
+    }
+
+    // does file exist?
+    if (stat(path1, &st1) != 0) {
+        printf("Error: File '%s' does not exist in the specified commit or latest commit.\n", filename);
+        return;
+    }
+    if (stat(path2, &st2) != 0) {
+        printf("Error: File '%s' does not exist in the working directory or specified commit.\n", filename);
+        return;
+    }
+
+    // execute diff command with color
+    char command[1024];
+    snprintf(command, sizeof(command), "diff --color=always %s %s", path1, path2);
+    result = system(command);
+
+    if (result == 0) {
+        printf("Files are identical.\n");
+    } else if (result == 256) { // exit code 1 translates to 256 in system
+        printf("Files differ.\n");
+    } else {
+        printf("Error running diff command.\n");
+    }
 }
 
 // copy file
@@ -570,22 +757,34 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[1], "create-remote") == 0 && argc == 3) {
         create_remote(argv[2]);
     } else if (strcmp(argv[1], "remote-init") == 0) {
-    remote_init();  
+        remote_init();
     } else if (strcmp(argv[1], "list-commits") == 0) {
-    list_commits();
+        list_commits();
+    } else if (strcmp(argv[1], "moments") == 0 && argc == 3) {
+        moments(argv[2]); // Expecting -n or -o
+    } else if (strcmp(argv[1], "diff") == 0) {
+        if (argc == 5) {
+            // Diff between two commits
+            diff_file(argv[2], argv[3], argv[4], 0);
+        } else if (argc == 4 && strcmp(argv[3], "-n") == 0) {
+            // Diff latest commit with the working directory
+            diff_file(argv[2], NULL, NULL, 1);
+        } else {
+            printf("Unknown command or incorrect arguments\n");
+            printf("Commands:\n");
+            printf("  init                  Initialize repository\n");
+            printf("  track <file>          Track a file\n");
+            printf("  track -a              Track all files in the current directory\n");
+            printf("  commit <msg>          Commit changes with a message\n");
+            printf("  revert <hash>         Revert to a specific commit\n");
+            printf("  remote <path>         Set the remote repository\n");
+            printf("  send                  Send commits to the remote repository\n");
+            printf("  fetch                 Fetch commits from the remote repository\n");
+            printf("  create-remote <path>  Create a remote repository from scratch\n");
+        }
     } else {
         printf("Unknown command or incorrect arguments\n");
-        printf("Commands:\n");
-        printf("  init                  Initialize repository\n");
-        printf("  track <file>          Track a file\n");
-        printf("  track -a              Track all files in the current directory\n");
-        printf("  commit <msg>          Commit changes with a message\n");
-        printf("  revert <hash>         Revert to a specific commit\n");
-        printf("  remote <path>         Set the remote repository\n");
-        printf("  send                  Send commits to the remote repository\n");
-        printf("  fetch                 Fetch commits from the remote repository\n");
-        printf("  create-remote <path>  Create a remote repository from scratch\n");
     }
 
-    return 0;
+    return 0; // Ensure this is the last line of the main function
 }
