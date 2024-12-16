@@ -86,44 +86,73 @@ void track(const char *filename) {
 }
 
 // track everything here in current dir like you're a hoarder
-void track_all() {
-    DIR *dir = opendir(".");
+void track_all_recursive(const char *dir_path) {
+    DIR *dir = opendir(dir_path);
     if (!dir) {
-        perror("Failed to open current directory");
+        perror("Failed to open directory");
         exit(1);
     }
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // skip special files
+        // Skip special files
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
 
+        char full_path[512];
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
+
         struct stat st;
-        if (stat(entry->d_name, &st) == 0 && S_ISREG(st.st_mode)) {
-            // track only regular files
-            track(entry->d_name);
+        if (stat(full_path, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                // If entry is a directory, recursively track its contents
+                track_all_recursive(full_path);
+            } else if (S_ISREG(st.st_mode)) {
+                // If entry is a regular file, track it
+                track(full_path);
+            }
+        } else {
+            perror("Failed to stat file");
         }
     }
     closedir(dir);
+}
+
+void track_all() {
+    // Start tracking recursively from the current directory
+    track_all_recursive(".");
+}
+void create_directories(const char *path) {
+    char temp[256];
+    strncpy(temp, path, sizeof(temp));
+    temp[sizeof(temp) - 1] = '\0';
+
+    for (char *p = temp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(temp, 0755); // Create intermediate directory
+            *p = '/';
+        }
+    }
 }
 
 // commit changes
 void commit(const char *message) {
     char line[256];
     char hash[HASH_SIZE];
+    FILE *temp_index;
 
-    // generate commit hash
+    // Generate commit hash
     time_t now = time(NULL);
-    snprintf(hash, sizeof(hash), "%lx", now); 
+    snprintf(hash, sizeof(hash), "%lx", now);
 
-    // create commit directory
+    // Create commit directory
     char commit_dir[256];
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, hash);
     mkdir(commit_dir, 0755);
 
-    // save metadata (commit message)
+    // Save metadata (commit message)
     char metadata_path[256];
     snprintf(metadata_path, sizeof(metadata_path), "%s/message", commit_dir);
     FILE *metadata = fopen(metadata_path, "w");
@@ -134,7 +163,7 @@ void commit(const char *message) {
     fprintf(metadata, "message: %s\n", message);
     fclose(metadata);
 
-    // save timestamp, history matters
+    // Save timestamp
     char timestamp_path[256];
     snprintf(timestamp_path, sizeof(timestamp_path), "%s/timestamp", commit_dir);
     FILE *timestamp = fopen(timestamp_path, "w");
@@ -142,32 +171,51 @@ void commit(const char *message) {
         perror("Failed to create timestamp file");
         exit(1);
     }
-    fprintf(timestamp, "%ld\n", now); // store the epoch time
+    fprintf(timestamp, "%ld\n", now);
     fclose(timestamp);
 
-    // save tracked files
+    // Process the index file
     FILE *index = fopen(INDEX_FILE, "r");
     if (!index) {
         perror("Failed to read index");
         exit(1);
     }
 
+    // Temporary index to hold valid entries
+    temp_index = fopen(".mnemos/index.temp", "w");
+    if (!temp_index) {
+        perror("Failed to create temporary index");
+        fclose(index);
+        exit(1);
+    }
+
     while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0; // strip newline
+        line[strcspn(line, "\n")] = 0; // Strip newline
 
         struct stat st;
-        if (stat(line, &st) != 0) {
-            printf("Warning: File '%s' is missing. Skipping.\n", line);
-            continue;
-        }
+        if (stat(line, &st) == 0) {
+            // File exists, commit it
+            char object_path[256];
+            snprintf(object_path, sizeof(object_path), "%s/%s", commit_dir, line);
 
-        char object_path[256];
-        snprintf(object_path, sizeof(object_path), "%s/%s", commit_dir, line);
-        copy_file(line, object_path);
+            // Ensure directory structure exists
+            create_directories(object_path);
+
+            // Copy file to commit
+            copy_file(line, object_path);
+            fprintf(temp_index, "%s\n", line); // Keep in new index
+        } else {
+            // File is missing, warn and skip
+            printf("Warning: File '%s' is missing. Skipping.\n", line);
+        }
     }
     fclose(index);
+    fclose(temp_index);
 
-    // update HEAD because this is now the latest and greatest commit
+    // Replace old index with new valid index
+    rename(".mnemos/index.temp", INDEX_FILE);
+
+    // Update HEAD to latest commit
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -178,15 +226,56 @@ void commit(const char *message) {
 
     printf("Committed changes: %s\n", message);
 }
-
 // Mnemos remembers. revert to another time, a simpler time
+// Recursive function to traverse and restore directories and files
+void restore_recursive(const char *src_base, const char *dest_base) {
+    struct stat st;
+    DIR *dir = opendir(src_base);
+    if (!dir) {
+        perror("Failed to open source directory during revert");
+        exit(1);
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // Skip special files
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        // Construct full paths for source and destination
+        char src_entry[512], dest_entry[512];
+        snprintf(src_entry, sizeof(src_entry), "%s/%s", src_base, entry->d_name);
+        snprintf(dest_entry, sizeof(dest_entry), "%s/%s", dest_base, entry->d_name);
+
+        if (stat(src_entry, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                // Create destination directory
+                create_directories(dest_entry);
+                printf("Restored directory: %s\n", dest_entry);
+
+                // Recursively restore contents of the directory
+                restore_recursive(src_entry, dest_entry);
+            } else if (S_ISREG(st.st_mode)) {
+                // Ensure parent directories exist
+                create_directories(dest_entry);
+
+                // Restore file
+                copy_file(src_entry, dest_entry);
+                printf("Restored file: %s\n", dest_entry);
+            }
+        } else {
+            perror("Failed to stat source entry during revert");
+        }
+    }
+    closedir(dir);
+}
+
+// Mnemos remembers. Revert to another time, a simpler time
 void revert(const char *commit_hash) {
     char commit_dir[256];
-    char line[256];
-    char tracked_files[1024][256];
-    int tracked_count = 0;
 
-    // check if commit directory exists
+    // Check if the commit directory exists
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
     struct stat st;
     if (stat(commit_dir, &st) != 0) {
@@ -196,62 +285,10 @@ void revert(const char *commit_hash) {
 
     printf("Reverting to commit: %s\n", commit_hash);
 
-    // read index to get the list of tracked files
-    FILE *index = fopen(INDEX_FILE, "r");
-    if (!index) {
-        perror("Failed to read index");
-        exit(1);
-    }
-    while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0; // Strip newline
-        strcpy(tracked_files[tracked_count++], line);
-    }
-    fclose(index);
+    // Start restoring from the root of the commit directory
+    restore_recursive(commit_dir, ".");
 
-    // read files in commit directory
-    DIR *dir = opendir(commit_dir);
-    if (!dir) {
-        perror("Failed to open commit directory");
-        exit(1);
-    }
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        // skip special files and metadata files
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, "timestamp") == 0 || strcmp(entry->d_name, "message") == 0) {
-            continue;
-        }
-
-        // make a way for source (commit directory) and destination (working directory)
-        char src_path[256], dest_path[256];
-        snprintf(src_path, sizeof(src_path), "%s/%s", commit_dir, entry->d_name);
-        snprintf(dest_path, sizeof(dest_path), "%s", entry->d_name);
-
-        // restore file
-        copy_file(src_path, dest_path);
-        printf("Restored: %s\n", entry->d_name);
-
-        // mark the file as restored (remove from tracked list)
-        for (int i = 0; i < tracked_count; ++i) {
-            if (strcmp(tracked_files[i], entry->d_name) == 0) {
-                tracked_files[i][0] = '\0'; // mark as restored
-            }
-        }
-    }
-    closedir(dir);
-
-    // remove files that are tracked but not in commit
-    for (int i = 0; i < tracked_count; ++i) {
-        if (tracked_files[i][0] != '\0') { // not restored
-            if (remove(tracked_files[i]) == 0) {
-                printf("Removed: %s\n", tracked_files[i]);
-            } else {
-                perror("Failed to remove file");
-            }
-        }
-    }
-
-    // ppdate HEAD
+    // Update HEAD to the reverted commit
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -262,7 +299,6 @@ void revert(const char *commit_hash) {
 
     printf("Revert complete.\n");
 }
-
 
 // copy file
 void copy_file(const char *src, const char *dest) {
