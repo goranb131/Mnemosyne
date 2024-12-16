@@ -25,7 +25,7 @@
 #define COMMITS_DIR ".mnemos/commits"
 
 /**
- * MurmurHash3 Implementation
+ * MurmurHash3 simplified implementation
  */
 uint32_t murmur3_32(const char *key, size_t len, uint32_t seed) {
     uint32_t c1 = 0xcc9e2d51;
@@ -99,7 +99,7 @@ void hash_file(const char *filename, char *hash_out) {
     size_t bytes_read;
     uint32_t hash = 0;
 
-    // Seed for MurmurHash
+    // seed for MurmurHash
     uint32_t seed = 42;
 
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
@@ -107,7 +107,7 @@ void hash_file(const char *filename, char *hash_out) {
     }
     fclose(file);
 
-    // Convert hash to a string
+    // hash to string
     snprintf(hash_out, HASH_SIZE, "%08x", hash);
 }
 
@@ -134,9 +134,9 @@ void remove_recursive(const char *path) {
     }
 }
 
-// Helper: Restore from a commit and clean up the working directory
+// restore from commit and clean the working dir
 void revert_clean(const char *commit_hash) {
-    // Step 1: Restore the commit as before
+    // restore commit as was
     char commit_dir[256];
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
     struct stat st;
@@ -148,7 +148,7 @@ void revert_clean(const char *commit_hash) {
     printf("Reverting to commit: %s\n", commit_hash);
     restore_recursive(commit_dir, ".");
 
-    // Step 2: Clean up the working directory to match the commit
+    // clean the working dir to match commit
     FILE *index = fopen(INDEX_FILE, "r");
     if (!index) {
         perror("Failed to open index for cleanup");
@@ -157,7 +157,8 @@ void revert_clean(const char *commit_hash) {
 
     char line[256];
     while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0;  // Remove newline
+        // remove newline
+        line[strcspn(line, "\n")] = 0;  
         if (stat(line, &st) != 0) {
             printf("Removing: %s\n", line);
             remove_recursive(line);
@@ -165,7 +166,7 @@ void revert_clean(const char *commit_hash) {
     }
     fclose(index);
 
-    // Update HEAD to reflect the reverted commit
+    // update HEAD according to reverted commit
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -295,17 +296,17 @@ void commit(const char *message) {
     char file_hash[HASH_SIZE];
     FILE *temp_index;
 
-    // Generate commit ID based on the current timestamp
+    // generate commit ID based on curr timestamp
     time_t now = time(NULL);
     char commit_hash[HASH_SIZE];
     snprintf(commit_hash, sizeof(commit_hash), "%lx", now);
 
-    // Create the commit directory
+    // make way for commit directory
     char commit_dir[256];
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
     mkdir(commit_dir, 0755);
 
-    // Save commit metadata
+    // save commit metadata
     char metadata_path[256];
     snprintf(metadata_path, sizeof(metadata_path), "%s/message", commit_dir);
     FILE *metadata = fopen(metadata_path, "w");
@@ -316,7 +317,7 @@ void commit(const char *message) {
     fprintf(metadata, "message: %s\n", message);
     fclose(metadata);
 
-    // Save commit timestamp
+    // save commit timestamp
     char timestamp_path[256];
     snprintf(timestamp_path, sizeof(timestamp_path), "%s/timestamp", commit_dir);
     FILE *timestamp = fopen(timestamp_path, "w");
@@ -333,7 +334,7 @@ void commit(const char *message) {
         exit(1);
     }
 
-    // Temporary index to track valid files for the next commit
+    // temp index to track valid files for next commit
     temp_index = fopen(".mnemos/index.temp", "w");
     if (!temp_index) {
         perror("Failed to create temporary index");
@@ -341,20 +342,21 @@ void commit(const char *message) {
         exit(1);
     }
 
-    // Process each file in the index
+    // for each file in index
     while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0; // Strip newline
+        // strip newline
+        line[strcspn(line, "\n")] = 0; 
 
         struct stat st;
         if (stat(line, &st) == 0) {
-            // Hash the file content
+            // hash file content
             hash_file(line, file_hash);
 
-            // Determine the object's path in the objects directory
+            // establish object path in objects dir
             char object_path[256];
             snprintf(object_path, sizeof(object_path), "%s/%s", OBJECTS_DIR, file_hash);
 
-            // Save the hash reference in the commit directory
+            // save hash reference in commit dir
             char commit_file_path[256];
             snprintf(commit_file_path, sizeof(commit_file_path), "%s/%s", commit_dir, line);
             create_directories(commit_file_path);
@@ -366,15 +368,16 @@ void commit(const char *message) {
                 fclose(temp_index);
                 return;
             }
-            fprintf(commit_entry, "%s\n", file_hash); // Save the file's hash
+            // save file hash
+            fprintf(commit_entry, "%s\n", file_hash); 
             fclose(commit_entry);
 
-            // Copy the file content to objects only if it doesn't already exist
+            // copy file content to objects (if it doesnt already exist)
             if (access(object_path, F_OK) == -1) {
                 copy_file(line, object_path);
             }
 
-            // Add the file back to the next commit index
+            // add file back to next commit index
             fprintf(temp_index, "%s\n", line);
         } else {
             printf("Warning: File '%s' is missing. Skipping.\n", line);
@@ -383,10 +386,10 @@ void commit(const char *message) {
     fclose(index);
     fclose(temp_index);
 
-    // Replace the old index with the updated index
+    // replace old index with updated index
     rename(".mnemos/index.temp", INDEX_FILE);
 
-    // Update HEAD to point to the latest commit
+    // update HEAD to point to latest commit
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -409,7 +412,7 @@ void restore_recursive(const char *src_base, const char *dest_base) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip special files and metadata
+        // skip special files and metadata
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
             strcmp(entry->d_name, "timestamp") == 0 || strcmp(entry->d_name, "message") == 0) {
             continue;
@@ -421,11 +424,11 @@ void restore_recursive(const char *src_base, const char *dest_base) {
 
         if (stat(src_entry, &st) == 0) {
             if (S_ISDIR(st.st_mode)) {
-                // Ensure directory exists
+                // dir must exist
                 mkdir(dest_entry, 0755);
-                restore_recursive(src_entry, dest_entry); // Recurse into subdirectory
+                restore_recursive(src_entry, dest_entry); 
             } else if (S_ISREG(st.st_mode)) {
-                // Restore file
+                // restore file
                 FILE *hash_file = fopen(src_entry, "r");
                 if (!hash_file) {
                     perror("Failed to open hash file during restore");
@@ -434,11 +437,12 @@ void restore_recursive(const char *src_base, const char *dest_base) {
 
                 char file_hash[HASH_SIZE];
                 if (fgets(file_hash, sizeof(file_hash), hash_file)) {
-                    file_hash[strcspn(file_hash, "\n")] = 0; // Strip newline
+                    // strip newline
+                    file_hash[strcspn(file_hash, "\n")] = 0; 
                 }
                 fclose(hash_file);
 
-                // Locate file in objects
+                // locate file in objects
                 char object_path[512];
                 snprintf(object_path, sizeof(object_path), "%s/%s", OBJECTS_DIR, file_hash);
 
@@ -447,7 +451,7 @@ void restore_recursive(const char *src_base, const char *dest_base) {
                     continue;
                 }
 
-                // Restore content from `objects/`
+                // restore content from objects/
                 copy_file(object_path, dest_entry);
                 printf("Restored file: %s\n", dest_entry);
             }
@@ -469,7 +473,7 @@ void revert(const char *commit_hash) {
     char commit_dir[256];
     struct stat st;
 
-    // Check if the commit exists
+    // does commit exist
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
     if (stat(commit_dir, &st) != 0) {
         printf("Error: Commit %s not found.\n", commit_hash);
@@ -478,10 +482,10 @@ void revert(const char *commit_hash) {
 
     printf("Reverting to commit: %s\n", commit_hash);
 
-    // Step 1: Restore files from the target commit
+    // restore files from target commit
     restore_recursive(commit_dir, ".");
 
-    // Step 2: Remove files not in the target commit
+    // remove files not in the target commit
     FILE *index = fopen(INDEX_FILE, "r");
     if (!index) {
         perror("Failed to open index for cleanup");
@@ -490,13 +494,13 @@ void revert(const char *commit_hash) {
 
     char line[256];
     while (fgets(line, sizeof(line), index)) {
-        line[strcspn(line, "\n")] = 0; // Remove newline
+        line[strcspn(line, "\n")] = 0; // remove newline
         snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
 
         char commit_file_path[512];
         snprintf(commit_file_path, sizeof(commit_file_path), "%s/%s", commit_dir, line);
 
-        // Check if file exists in the target commit
+        // does file exist in target commit
         if (stat(commit_file_path, &st) != 0) {
             printf("Removing: %s\n", line);
             remove_recursive(line);
@@ -504,7 +508,7 @@ void revert(const char *commit_hash) {
     }
     fclose(index);
 
-    // Step 3: Update HEAD
+    // update HEAD
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -956,13 +960,13 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[1], "list-commits") == 0) {
         list_commits();
     } else if (strcmp(argv[1], "moments") == 0 && argc == 3) {
-        moments(argv[2]); // Expecting -n or -o
+        moments(argv[2]); // -n or -o
     } else if (strcmp(argv[1], "diff") == 0) {
         if (argc == 5) {
-            // Diff between two commits
+            // diff between 2 commits
             diff_file(argv[2], argv[3], argv[4], 0);
         } else if (argc == 4 && strcmp(argv[3], "-n") == 0) {
-            // Diff latest commit with the working directory
+            // diff latest commit with current status - working directory
             diff_file(argv[2], NULL, NULL, 1);
         } else {
             printf("Unknown command or incorrect arguments\n");
@@ -981,5 +985,5 @@ int main(int argc, char *argv[]) {
         printf("Unknown command or incorrect arguments\n");
     }
 
-    return 0; // Ensure this is the last line of the main function
+    return 0; 
 }
