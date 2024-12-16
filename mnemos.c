@@ -245,8 +245,9 @@ void track_all_recursive(const char *dir_path) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // skip special files
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+        // Skip special files and `.mnemos` internals
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
+            strncmp(entry->d_name, ".mnemos", 7) == 0) {
             continue;
         }
 
@@ -256,10 +257,10 @@ void track_all_recursive(const char *dir_path) {
         struct stat st;
         if (stat(full_path, &st) == 0) {
             if (S_ISDIR(st.st_mode)) {
-                // if directory, track it recursive
+                // Recurse into subdirectories
                 track_all_recursive(full_path);
             } else if (S_ISREG(st.st_mode)) {
-                // if regular file then track it
+                // Track regular files
                 track(full_path);
             }
         } else {
@@ -468,6 +469,7 @@ void revert(const char *commit_hash) {
     char commit_dir[256];
     struct stat st;
 
+    // Check if the commit exists
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
     if (stat(commit_dir, &st) != 0) {
         printf("Error: Commit %s not found.\n", commit_hash);
@@ -476,7 +478,10 @@ void revert(const char *commit_hash) {
 
     printf("Reverting to commit: %s\n", commit_hash);
 
-    // Step 1: Remove only tracked files
+    // Step 1: Restore files from the target commit
+    restore_recursive(commit_dir, ".");
+
+    // Step 2: Remove files not in the target commit
     FILE *index = fopen(INDEX_FILE, "r");
     if (!index) {
         perror("Failed to open index for cleanup");
@@ -486,19 +491,20 @@ void revert(const char *commit_hash) {
     char line[256];
     while (fgets(line, sizeof(line), index)) {
         line[strcspn(line, "\n")] = 0; // Remove newline
-        if (strcmp(line, INDEX_FILE) == 0) {
-            printf("Skipping index file: %s\n", line);
-            continue;
+        snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
+
+        char commit_file_path[512];
+        snprintf(commit_file_path, sizeof(commit_file_path), "%s/%s", commit_dir, line);
+
+        // Check if file exists in the target commit
+        if (stat(commit_file_path, &st) != 0) {
+            printf("Removing: %s\n", line);
+            remove_recursive(line);
         }
-        printf("Removing: %s\n", line);
-        remove_recursive(line);
     }
     fclose(index);
 
-    // Step 2: Restore files and directories
-    restore_recursive(commit_dir, ".");
-
-    // Step 3: Update HEAD to reflect the reverted commit
+    // Step 3: Update HEAD
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -509,6 +515,7 @@ void revert(const char *commit_hash) {
 
     printf("Revert complete.\n");
 }
+
 /*
  * moments: A simple stroll through project history.
  * 
