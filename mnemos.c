@@ -744,15 +744,48 @@ void send() {
     // trim newline
     remote_path[strcspn(remote_path, "\n")] = 0;
 
-    // rsync commits into remote commits dir
-    char command[512];
-    snprintf(command, sizeof(command), "rsync -av %s/ %s/commits/", COMMITS_DIR, remote_path);
-    int result = system(command);
-
-    if (result == 0) {
-        printf("Commits sent to remote: %s\n", remote_path);
+    // user@host and path
+    char remote_host[128] = {0};
+    char remote_dir[128] = {0};
+    char *colon = strchr(remote_path, ':');
+    if (colon) {
+        size_t host_len = colon - remote_path;
+        strncpy(remote_host, remote_path, host_len);
+        remote_host[host_len] = '\0';
+        strcpy(remote_dir, colon + 1);
     } else {
-        printf("Failed to send commits to remote.\n");
+        printf("Invalid remote path format. Use user@host:/path/to/repo\n");
+        return;
+    }
+
+    // remote directories must be created
+    char command[512];
+    snprintf(command, sizeof(command),
+             "ssh %s 'mkdir -p \"%s/commits\" \"%s/objects\"'",
+             remote_host, remote_dir, remote_dir);
+    int result_mkdir = system(command);
+    if (result_mkdir != 0) {
+        printf("Failed to create remote directories at %s:%s\n", remote_host, remote_dir);
+        return;
+    }
+
+    // rsync commits
+    snprintf(command, sizeof(command), "rsync -av %s/ %s:%s/commits/", COMMITS_DIR, remote_host, remote_dir);
+    int result_commits = system(command);
+
+    // rsync objects
+    snprintf(command, sizeof(command), "rsync -av %s/ %s:%s/objects/", OBJECTS_DIR, remote_host, remote_dir);
+    int result_objects = system(command);
+
+    if (result_commits == 0 && result_objects == 0) {
+        printf("Commits and objects sent to remote: %s:%s\n", remote_host, remote_dir);
+    } else {
+        if (result_commits != 0) {
+            printf("Failed to send commits to remote.\n");
+        }
+        if (result_objects != 0) {
+            printf("Failed to send objects to remote.\n");
+        }
     }
 }
 
@@ -771,22 +804,31 @@ void fetch() {
     // trim newline
     remote_path[strcspn(remote_path, "\n")] = 0;
 
-    // make sure .mnemos exists
+    // .mnemos must exist
     struct stat st;
     if (stat(MNEMOS_DIR, &st) != 0) {
         printf("Error: This is not a Mnemos repository. Initialize it first with 'mnemos init'.\n");
         exit(1);
     }
 
-    // rsync contents of remote commits directory directly into local .mnemos/commits
+    // rsync commits
     char command[512];
     snprintf(command, sizeof(command), "rsync -av %s/commits/ %s/", remote_path, COMMITS_DIR);
-    int result = system(command);
+    int result_commits = system(command);
 
-    if (result == 0) {
-        printf("Commits fetched from remote: %s\n", remote_path);
+    // rsync objects
+    snprintf(command, sizeof(command), "rsync -av %s/objects/ %s/", remote_path, OBJECTS_DIR);
+    int result_objects = system(command);
+
+    if (result_commits == 0 && result_objects == 0) {
+        printf("Commits and objects fetched from remote: %s\n", remote_path);
     } else {
-        printf("Failed to fetch commits from remote.\n");
+        if (result_commits != 0) {
+            printf("Failed to fetch commits from remote.\n");
+        }
+        if (result_objects != 0) {
+            printf("Failed to fetch objects from remote.\n");
+        }
     }
 }
 
