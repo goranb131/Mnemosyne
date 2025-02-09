@@ -87,6 +87,11 @@ void set_remote(const char *remote_path);
 void send();
 void fetch();
 void create_remote(const char *remote_path);
+void status();
+void create_memory(const char *memory_name);
+void list_memories();
+void recall_memory(const char *memory_name);
+void blend_memory(const char *source_memory);
 
 void hash_file(const char *filename, char *hash_out) {
     FILE *file = fopen(filename, "rb");
@@ -134,11 +139,12 @@ void remove_recursive(const char *path) {
     }
 }
 
-// restore from commit and clean the working dir
+// memories are like bookmarks to moments in time
 void revert_clean(const char *commit_hash) {
-    // restore commit as was
     char commit_dir[256];
     snprintf(commit_dir, sizeof(commit_dir), "%s/%s", COMMITS_DIR, commit_hash);
+    
+    // Check if commit exists
     struct stat st;
     if (stat(commit_dir, &st) != 0) {
         printf("Error: Commit %s not found.\n", commit_hash);
@@ -146,27 +152,66 @@ void revert_clean(const char *commit_hash) {
     }
 
     printf("Reverting to commit: %s\n", commit_hash);
+
+    // build a list of files that should exist
+    char **expected_files = NULL;
+    int file_count = 0;
+    DIR *commit_dir_handle = opendir(commit_dir);
+    if (commit_dir_handle) {
+        struct dirent *commit_entry;
+        while ((commit_entry = readdir(commit_dir_handle)) != NULL) {
+            if (strcmp(commit_entry->d_name, ".") == 0 || 
+                strcmp(commit_entry->d_name, "..") == 0 ||
+                strcmp(commit_entry->d_name, "message") == 0 ||
+                strcmp(commit_entry->d_name, "timestamp") == 0) {
+                continue;
+            }
+            // add to expected files list
+            expected_files = realloc(expected_files, (file_count + 1) * sizeof(char *));
+            expected_files[file_count] = strdup(commit_entry->d_name);
+            file_count++;
+        }
+        closedir(commit_dir_handle);
+    }
+
+    // check current directory and remove files that shouldnt exist
+    DIR *current_dir = opendir(".");
+    if (current_dir) {
+        struct dirent *entry;
+        while ((entry = readdir(current_dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || 
+                strcmp(entry->d_name, "..") == 0 || 
+                strncmp(entry->d_name, ".mnemos", 7) == 0) {
+                continue;
+            }
+
+            // check if file should exist
+            int should_exist = 0;
+            for (int i = 0; i < file_count; i++) {
+                if (strcmp(entry->d_name, expected_files[i]) == 0) {
+                    should_exist = 1;
+                    break;
+                }
+            }
+
+            if (!should_exist) {
+                printf("Removing: %s (not in target commit)\n", entry->d_name);
+                remove_recursive(entry->d_name);
+            }
+        }
+        closedir(current_dir);
+    }
+
+    // free expected files list
+    for (int i = 0; i < file_count; i++) {
+        free(expected_files[i]);
+    }
+    free(expected_files);
+
+    // restore files from commit
     restore_recursive(commit_dir, ".");
 
-    // clean the working dir to match commit
-    FILE *index = fopen(INDEX_FILE, "r");
-    if (!index) {
-        perror("Failed to open index for cleanup");
-        return;
-    }
-
-    char line[256];
-    while (fgets(line, sizeof(line), index)) {
-        // remove newline
-        line[strcspn(line, "\n")] = 0;  
-        if (stat(line, &st) != 0) {
-            printf("Removing: %s\n", line);
-            remove_recursive(line);
-        }
-    }
-    fclose(index);
-
-    // update HEAD according to reverted commit
+    // update HEAD
     FILE *head = fopen(HEAD_FILE, "w");
     if (!head) {
         perror("Failed to update HEAD");
@@ -246,7 +291,7 @@ void track_all_recursive(const char *dir_path) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip special files and `.mnemos` internals
+        // skip special files and .mnemos internals
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
             strncmp(entry->d_name, ".mnemos", 7) == 0) {
             continue;
@@ -258,10 +303,10 @@ void track_all_recursive(const char *dir_path) {
         struct stat st;
         if (stat(full_path, &st) == 0) {
             if (S_ISDIR(st.st_mode)) {
-                // Recurse into subdirectories
+                // recurse into subdirectories
                 track_all_recursive(full_path);
             } else if (S_ISREG(st.st_mode)) {
-                // Track regular files
+                // track regular files
                 track(full_path);
             }
         } else {
@@ -462,7 +507,7 @@ void restore_recursive(const char *src_base, const char *dest_base) {
     closedir(dir);
 }
 /* 
- * Mnemonyse remembers. Revert to another time, a simpler time.
+ * Mnemosyne remembers. Revert to another time, a simpler time.
  *
  * If I want to revert, let me revert! Don't nanny me about unstaged or untracked files.
  * Either:
@@ -656,7 +701,7 @@ void diff_file(const char *filename, const char *commit1, const char *commit2, i
 
         // path to file in the latest commit
         snprintf(path1, sizeof(path1), "%s/%s/%s", COMMITS_DIR, latest_commit, filename);
-        snprintf(path2, sizeof(path2), "%s", filename); // Working directory file
+        snprintf(path2, sizeof(path2), "%s", filename); // working directory file
     } else {
         // paths to files in specified commits
         snprintf(path1, sizeof(path1), "%s/%s/%s", COMMITS_DIR, commit1, filename);
@@ -969,6 +1014,290 @@ void list_commits() {
     }
 }
 
+// status function
+void status() {
+    FILE *index = fopen(INDEX_FILE, "r");
+    if (!index) {
+        printf("No tracked files found. Use 'mnemos track <file>' to start tracking files.\n");
+        return;
+    }
+
+    // current HEAD commit for comparing
+    char head_commit[HASH_SIZE] = {0};
+    FILE *head = fopen(HEAD_FILE, "r");
+    if (head) {
+        if (fgets(head_commit, sizeof(head_commit), head)) {
+            head_commit[strcspn(head_commit, "\n")] = 0; // remove newline
+        }
+        fclose(head);
+    }
+
+    printf("Status of tracked files:\n");
+    printf("------------------------\n");
+
+    char line[256];
+    while (fgets(line, sizeof(line), index)) {
+        line[strcspn(line, "\n")] = 0; // remove newline
+        
+        struct stat st;
+        if (stat(line, &st) != 0) {
+            printf("\033[31m[MISSING]\033[0m %s\n", line);
+            continue;
+        }
+
+        // is file modified compared to last commit?
+        char current_hash[HASH_SIZE];
+        hash_file(line, current_hash);
+
+        if (head_commit[0] != '\0') {
+            char commit_file_path[512];
+            snprintf(commit_file_path, sizeof(commit_file_path), 
+                    "%s/%s/%s", COMMITS_DIR, head_commit, line);
+            
+            FILE *commit_file = fopen(commit_file_path, "r");
+            if (commit_file) {
+                char committed_hash[HASH_SIZE];
+                if (fgets(committed_hash, sizeof(committed_hash), commit_file)) {
+                    committed_hash[strcspn(committed_hash, "\n")] = 0;
+                    
+                    if (strcmp(current_hash, committed_hash) == 0) {
+                        printf("\033[32m[UNCHANGED]\033[0m %s\n", line);
+                    } else {
+                        printf("\033[33m[MODIFIED]\033[0m %s\n", line);
+                    }
+                }
+                fclose(commit_file);
+            } else {
+                printf("\033[36m[NEW]\033[0m %s\n", line);
+            }
+        } else {
+            printf("\033[36m[NEW]\033[0m %s\n", line);
+        }
+    }
+    fclose(index);
+
+    // show untracked files in current directory
+    printf("\nUntracked files:\n");
+    printf("----------------\n");
+    DIR *dir = opendir(".");
+    if (dir) {
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || 
+                strcmp(entry->d_name, "..") == 0 || 
+                strncmp(entry->d_name, ".mnemos", 7) == 0) {
+                continue;
+            }
+
+            // is file already tracked?
+            int is_tracked = 0;
+            rewind(index);
+            index = fopen(INDEX_FILE, "r");
+            if (index) {
+                while (fgets(line, sizeof(line), index)) {
+                    line[strcspn(line, "\n")] = 0;
+                    if (strcmp(line, entry->d_name) == 0) {
+                        is_tracked = 1;
+                        break;
+                    }
+                }
+                fclose(index);
+            }
+
+            if (!is_tracked) {
+                struct stat st;
+                if (stat(entry->d_name, &st) == 0 && S_ISREG(st.st_mode)) {
+                    printf("\033[90m%s\n\033[0m", entry->d_name);
+                }
+            }
+        }
+        closedir(dir);
+    }
+}
+
+// in place of branches, we have "memories" - different remembered states
+// memory is just a named pointer to commit but conceptually simpler
+void create_memory(const char *memory_name) {
+    char memory_file[256];
+    snprintf(memory_file, sizeof(memory_file), "%s/memories/%s", MNEMOS_DIR, memory_name);
+    
+    // Get current HEAD
+    FILE *head = fopen(HEAD_FILE, "r");
+    if (!head) {
+        printf("Error: No moments captured yet\n");
+        return;
+    }
+    
+    char current_commit[HASH_SIZE];
+    if (fgets(current_commit, sizeof(current_commit), head)) {
+        current_commit[strcspn(current_commit, "\n")] = 0;  // remove newline
+    }
+    fclose(head);
+    
+    // create memory pointing to current moment
+    mkdir(MNEMOS_DIR "/memories", 0755);  // directory should exist
+    FILE *memory = fopen(memory_file, "w");
+    if (!memory) {
+        printf("Error: Could not capture memory\n");
+        return;
+    }
+    fprintf(memory, "%s", current_commit);
+    fclose(memory);
+    
+    printf("Captured memory: %s\n", memory_name);
+}
+
+// show what memories are saved
+void list_memories() {
+    DIR *dir = opendir(MNEMOS_DIR "/memories");
+    if (!dir) {
+        printf("No memories captured yet.\n");
+        return;
+    }
+
+    printf("Captured memories:\n");
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] != '.') {  // skip . and ..
+            char memory_file[256];
+            snprintf(memory_file, sizeof(memory_file), 
+                    "%s/memories/%s", MNEMOS_DIR, entry->d_name);
+            
+            FILE *f = fopen(memory_file, "r");
+            if (f) {
+                char commit_hash[HASH_SIZE];
+                if (fgets(commit_hash, sizeof(commit_hash), f)) {
+                    commit_hash[strcspn(commit_hash, "\n")] = 0;  // remove newline
+                    printf("  %s -> moment %s\n", entry->d_name, commit_hash);
+                }
+                fclose(f);
+            }
+        }
+    }
+    closedir(dir);
+}
+
+// go back to a saved memory (recall)
+void recall_memory(const char *memory_name) {
+    char memory_file[256];
+    snprintf(memory_file, sizeof(memory_file), 
+            "%s/memories/%s", MNEMOS_DIR, memory_name);
+    
+    FILE *memory = fopen(memory_file, "r");
+    if (!memory) {
+        printf("Error: Memory '%s' not found\n", memory_name);
+        return;
+    }
+    
+    char commit_hash[HASH_SIZE];
+    if (fgets(commit_hash, sizeof(commit_hash), memory)) {
+        commit_hash[strcspn(commit_hash, "\n")] = 0;  // Remove newline
+    }
+    fclose(memory);
+    
+    printf("Recalling memory: %s\n", memory_name);
+    revert_clean(commit_hash);  // Use existing revert functionality
+}
+
+// blend another memory into current state
+void blend_memory(const char *source_memory) {
+    char memory_file[256];
+    snprintf(memory_file, sizeof(memory_file), 
+            "%s/memories/%s", MNEMOS_DIR, source_memory);
+    
+    FILE *memory = fopen(memory_file, "r");
+    if (!memory) {
+        printf("Error: Memory '%s' not found\n", source_memory);
+        return;
+    }
+    
+    // Get source commit
+    char source_commit[HASH_SIZE];
+    if (fgets(source_commit, sizeof(source_commit), memory)) {
+        source_commit[strcspn(source_commit, "\n")] = 0;
+    }
+    fclose(memory);
+
+    // Get list of files from source commit
+    char source_dir[256];
+    snprintf(source_dir, sizeof(source_dir), "%s/%s", COMMITS_DIR, source_commit);
+    
+    DIR *dir = opendir(source_dir);
+    if (!dir) {
+        printf("Error: Cannot read source memory state\n");
+        return;
+    }
+
+    printf("Blending memory '%s' into current state...\n", source_memory);
+    
+    // for each file in source memory
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || 
+            strcmp(entry->d_name, "..") == 0 ||
+            strcmp(entry->d_name, "message") == 0 ||
+            strcmp(entry->d_name, "timestamp") == 0) {
+            continue;
+        }
+
+        char source_file[512], current_file[512];
+        snprintf(source_file, sizeof(source_file), "%s/%s", source_dir, entry->d_name);
+        snprintf(current_file, sizeof(current_file), "%s", entry->d_name);
+
+        // does file exist in current state
+        if (access(current_file, F_OK) != -1) {
+            char current_hash[HASH_SIZE], source_hash[HASH_SIZE];
+            hash_file(current_file, current_hash);
+            
+            FILE *source_hash_file = fopen(source_file, "r");
+            if (source_hash_file) {
+                fgets(source_hash, sizeof(source_hash), source_hash_file);
+                source_hash[strcspn(source_hash, "\n")] = 0;
+                fclose(source_hash_file);
+
+                if (strcmp(current_hash, source_hash) != 0) {
+                    printf("File differs: %s\n", entry->d_name);
+                    printf("  Keep current version? [Y/n]: ");
+                    char response[10];
+                    fgets(response, sizeof(response), stdin);
+                    if (response[0] == 'n' || response[0] == 'N') {
+                        // restore file from source memory
+                        char object_path[512];
+                        snprintf(object_path, sizeof(object_path), "%s/%s", OBJECTS_DIR, source_hash);
+                        copy_file(object_path, current_file);
+                        printf("  Updated with version from '%s'\n", source_memory);
+                    }
+                }
+            }
+        } else {
+            // if file doesnt exist in current state offer to add it
+            printf("New file from '%s': %s\n", source_memory, entry->d_name);
+            printf("  Add this file? [Y/n]: ");
+            char response[10];
+            fgets(response, sizeof(response), stdin);
+            if (response[0] != 'n' && response[0] != 'N') {
+                // file hash from source memory
+                FILE *source_hash_file = fopen(source_file, "r");
+                if (source_hash_file) {
+                    char file_hash[HASH_SIZE];
+                    fgets(file_hash, sizeof(file_hash), source_hash_file);
+                    file_hash[strcspn(file_hash, "\n")] = 0;
+                    fclose(source_hash_file);
+
+                    // restore file from objects
+                    char object_path[512];
+                    snprintf(object_path, sizeof(object_path), "%s/%s", OBJECTS_DIR, file_hash);
+                    create_directories(current_file);
+                    copy_file(object_path, current_file);
+                    printf("  Added file from '%s'\n", source_memory);
+                }
+            }
+        }
+    }
+    closedir(dir);
+
+    printf("Memory blend complete. Don't forget to commit the changes!\n");
+}
 
 // master function
 int main(int argc, char *argv[]) {
@@ -1023,6 +1352,16 @@ int main(int argc, char *argv[]) {
             printf("  fetch                 Fetch commits from the remote repository\n");
             printf("  create-remote <path>  Create a remote repository from scratch\n");
         }
+    } else if (strcmp(argv[1], "status") == 0) {
+        status();
+    } else if (strcmp(argv[1], "remember") == 0 && argc == 3) {
+        create_memory(argv[2]);
+    } else if (strcmp(argv[1], "memories") == 0) {
+        list_memories();
+    } else if (strcmp(argv[1], "recall") == 0 && argc == 3) {
+        recall_memory(argv[2]);
+    } else if (strcmp(argv[1], "blend") == 0 && argc == 3) {
+        blend_memory(argv[2]);
     } else {
         printf("Unknown command or incorrect arguments\n");
     }

@@ -2,7 +2,9 @@
 CC = cc
 CFLAGS = -Wall -Wextra -O2 -std=c99
 TARGET = mnemos
-PREFIX = /usr/local
+PREFIX ?= /usr/local
+BINDIR = $(PREFIX)/bin
+INSTALL = install
 
 # Default target: build
 all: $(TARGET)
@@ -13,10 +15,9 @@ $(TARGET): mnemos.c
 
 # Install the binary
 install: $(TARGET)
-	mkdir -p $(PREFIX)/bin
-	cp $(TARGET) $(PREFIX)/bin
-	chmod 755 $(PREFIX)/bin/$(TARGET)
-	@echo "Installed $(TARGET) to $(PREFIX)/bin"
+	$(INSTALL) -d $(DESTDIR)$(BINDIR)
+	$(INSTALL) -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/$(TARGET)
+	@echo "Installed $(TARGET) to $(DESTDIR)$(BINDIR)"
 
 # Uninstall the binary
 uninstall:
