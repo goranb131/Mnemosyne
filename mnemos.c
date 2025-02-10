@@ -1,5 +1,5 @@
 /*
- * Mnemonyse: The Simplest Version Control
+ * Mnemosyne: The Simplest Version Control
  * -------------------------------------------
  * Designed for humans who just want their files tracked and backed up.
  * Can be explained to your cat in one sitting.
@@ -445,7 +445,7 @@ void commit(const char *message) {
 
     printf("Committed changes: %s\n", message);
 }
-// Mnemonyse remembers. 
+// Mnemosyne remembers. 
 // Recursive function to traverse and restore directories and files
 void restore_recursive(const char *src_base, const char *dest_base) {
     struct stat st;
@@ -571,7 +571,7 @@ void revert(const char *commit_hash) {
  *   - Pretty log? Add --pretty=oneline or --graph or --decorate=auto.
  *   - Reverse order? Combine flags until you break something.
  * 
- * Mnemonyse gives you moments. Oldest? Newest? Just ask.
+ * Mnemosyne gives you moments. Oldest? Newest? Just ask.
  * Not feeling like you are hacking Pentagon to see what you worked on last week.
  */
 void moments(const char *order_flag) {
