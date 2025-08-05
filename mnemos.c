@@ -1,9 +1,7 @@
 /*
- * Mnemosyne: The Simplest Version Control
- * -------------------------------------------
- * Designed for humans who just want their files tracked and backed up.
- * Can be explained to your cat in one sitting.
- *
+ * ---------------------------------------------------
+ * Mnemosyne: The Simplest Alternative Version Control
+ * ---------------------------------------------------
  */
 
 #include <stdio.h>
@@ -235,7 +233,6 @@ void init() {
     fclose(index);
     
     // if file doesnt exist, create it, otherwise reset to zero bytes
-    // no existential crises here
     FILE *head = fopen(HEAD_FILE, "w");
     // close
     fclose(head);
@@ -509,10 +506,6 @@ void restore_recursive(const char *src_base, const char *dest_base) {
 /* 
  * Mnemosyne remembers. Revert to another time, a simpler time.
  *
- * If I want to revert, let me revert! Don't nanny me about unstaged or untracked files.
- * Either:
- *   1. Handhold the "stupid masses" through every commit, rebase, and revert; OR
- *   2. Be a pure, no-frills, Unix-style tool that assumes the user knows what they're doing.
  */
 void revert(const char *commit_hash) {
     char commit_dir[256];
@@ -566,13 +559,8 @@ void revert(const char *commit_hash) {
 }
 
 /*
- * moments: A simple stroll through project history.
+ * moments: simple stroll through project history.
  * 
- *   - Pretty log? Add --pretty=oneline or --graph or --decorate=auto.
- *   - Reverse order? Combine flags until you break something.
- * 
- * Mnemosyne gives you moments. Oldest? Newest? Just ask.
- * Not feeling like you are hacking Pentagon to see what you worked on last week.
  */
 void moments(const char *order_flag) {
     DIR *dir = opendir(COMMITS_DIR);
@@ -668,12 +656,7 @@ void moments(const char *order_flag) {
 }
 
 /* 
- * Let's talk about diff.
- * 
- * Compare the index? The staging area? 
- * Your last mistake? Your future regret? Who knows.
- *   - Want to compare two commits? Provide filenames and commit hashes.
- *   - Want to compare a file to the latest commit? Use -n.
+ * diff
  */
 void diff_file(const char *filename, const char *commit1, const char *commit2, int latest_flag) {
     char path1[512], path2[512];
@@ -770,10 +753,7 @@ void set_remote(const char *remote_path) {
     printf("Remote set to: %s\n", remote_path);
 }
 
-/* SEND
-Fast-forward? Rebase? Merge? Detached heads? Do I look like I care? 
-Maybe sacrifice a goat under a dark moon first?
-we're not pushing, no babies here, just sending files like normal sane humans.
+/* SEND - remote
 */
 void send() {
     FILE *remote = fopen(REMOTE_FILE, "r");
