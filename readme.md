@@ -1,13 +1,6 @@
 # Mnemosyne
 
-Mnemosyne is simplest version control system (yes, really - the question is, why hasn’t this existed already) - designed for developers who value sanity over ceremony. Track changes, commit versions, revert to previous states, and send changes to remotes.
-
-## Why Mnemosyne?
-
-- Track files, commit changes, and restore versions without sacrificing goats under a dark blood moon.
-- Send changes to remotes and fetch them back without labyrinthine workflows.
-
-We're writing code or poetry here, then tracking, not launching a spaceship — if you want that, write some useful C code instead.
+Mnemosyne is simplified version control system. Track changes, commit versions, revert to previous states, and send changes to remotes.
 
 ## Features
 
@@ -75,9 +68,9 @@ To find available commit hashes, simply list them with:
 
 	    ls .mnemos/commits
 
-**Why this approach? Because we want to treat everything like a file, when UNIX allows. Your commits are not buried in some crappy database, they are real directories stored in .mnemos/commits, directly accessible with standard tools like ls.**
+**Why this approach? Because we want to treat everything like a file, when UNIX allows. Your commits are not buried in database, they are real directories stored in .mnemos/commits, directly accessible with standard tools like ls.**
 
-**This means you don't need special commands or bloat just to see what's saved. *ls* gives you all the context you need. Each commit hash is its own entity, to revert, inspect, or send to remotes without blood moon ceremonies.**
+**This means *ls* gives you all the context you need. Each commit hash is its own entity, to revert, inspect, or send to remotes without blood moon ceremonies.**
 
 Revert the repository to a specific commit using its hash:
 
@@ -178,4 +171,6 @@ Another approach is to directly run the deploy script after mnemos send.
 
 ## License
 
-This project is open source. Use it, modify it, share it - just don't sacrifice goats under a blood-red moon.
+MIT
+
+This project is open source. Use it, modify it, share it.
